@@ -24,6 +24,7 @@ from pathlib import Path
 import pickle
 from shared import shared
 from IPython.display import display, clear_output
+import pyrender
 
 def warn(*args, **kwargs):
     pass
@@ -41,8 +42,6 @@ def patched_glGenTextures(count, textures=None):
     else:
         raw_glGenTextures(count, textures)
 GL.glGenTextures = patched_glGenTextures
-
-import pyrender
 
 def start_resource_monitor():
     import ipywidgets as widgets
@@ -102,14 +101,18 @@ def start_resource_monitor():
     thread.start()
 
 def initialize_logging(config_path, is_for_photo):
+    # Parameter is_for_photo not used?
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
-    scene_name = config['scene_name']
+    scene_name = config['scene_name'] # Doesn't do anything?
+
+    # These lines do the same thing?
     shared.update({"config": config})
     shared['config'] = config
 
+
 def init(config_path, is_for_photo=False):
-    start_resource_monitor()
+    #start_resource_monitor()
     initialize_logging(config_path, is_for_photo)
 
 def show2d(images, path="", dpi=100, layout="h", bgr=False, return_image=False, line_width=2):
@@ -302,6 +305,8 @@ def init_renderer(scale=0.05, load_mesh=False):
         scene = pyrender.Scene(ambient_light=True)
 
         if not load_mesh:
+            # load_mesh = false.
+            # So low quality, MeshLR
             msh = o3d.io.read_triangle_mesh(str(mesh_path))
             tm_obj = trimesh.Trimesh(
                 vertices=np.asarray(msh.vertices),
@@ -360,6 +365,11 @@ TUPLE_TO_AXES_CONV = {v: k for k, v in AXES_CONV_TO_TUPLE.items()}
 NEXT_AXIS_IN_CONV = [1, 2, 0, 1]
 
 def rot_mat_from_vecs(vec1, vec2):
+    '''
+    Private function.
+
+    Used by compute_camera_rotation.
+    '''
     unit_vec1 = (vec1 / np.linalg.norm(vec1)).reshape(3)
     unit_vec2 = (vec2 / np.linalg.norm(vec2)).reshape(3)
     cross_prod = np.cross(unit_vec1, unit_vec2) 
@@ -372,6 +382,12 @@ def rot_mat_from_vecs(vec1, vec2):
     return rot_mat
 
 def euler_to_mat(ang_i, ang_j, ang_k, axes='sxyz'):
+    '''
+    Private function.
+
+    Used by compute_camera_rotation.
+    '''
+
     try:
         first_axis, parity, rep, frame = AXES_CONV_TO_TUPLE[axes]
     except (AttributeError, KeyError):
@@ -412,6 +428,11 @@ def euler_to_mat(ang_i, ang_j, ang_k, axes='sxyz'):
     return M
 
 def compute_camera_rotation(yaw, pitch):
+    '''
+    Private function.
+
+    Used by generate_camera_3d_thickness()
+    '''
     init_rot = rot_mat_from_vecs([0, 0, 1], [0, -1, 0])
     yaw_pitch_rot = euler_to_mat(
         np.deg2rad(-pitch), np.deg2rad(yaw), 0, axes="rxzx").T[:3, :3]
@@ -487,13 +508,18 @@ def create_mesh_element_v2(
             hoverinfo="none"
         )
 
-def generate_camera_3d_thickness(
-    origin: List[float],
-    yaw: float,
-    pitch: float,
-    text: str = None,
-    scale: float = 0.5
-) -> List[go.Trace]:
+def generate_camera_3d_thickness(origin: List[float],
+                                 yaw: float,
+                                 pitch: float,
+                                 text: str = None,
+                                 scale: float = 0.5
+                                ) -> List[go.Trace]:
+    '''
+    Public function.
+
+
+    '''
+
     rot = compute_camera_rotation(yaw, pitch)
 
     flattened = default_camera_faces.reshape(-1, 3)
@@ -576,9 +602,34 @@ def inpect_camera_marker():
     fig.show()
 
 def load_camera_parameters(json_path):
+    '''
+    Loads camera parameters (waypoints) from a json file, checks if a 'path' exists
+    in the file and then puts the gathered data into a dict.
+    
+    Parameters
+    ----------
+    json_path : str or anything to do with path
+        Path to the waypoint json files.
+
+    Returns
+    ----------
+    ```
+    result = {
+        'metadata': _,
+        'positions': _,
+        'rotations': _,
+        'num_cameras': _
+        'waypoint_order': _,
+        'has_route': _
+    }  
+    ```  
+    '''
+
+    # Open and read the cameras file in the waypoints folder. 
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
+    # Neatly format the data and store it in a dict "Result".
     cameras = data['cameras']
     
     positions = np.array([cam['position'] for cam in cameras])
@@ -591,6 +642,10 @@ def load_camera_parameters(json_path):
         'num_cameras': len(cameras)
     }
     
+    # The key "waypoint_order" is right at the end of the cameras json file.
+    # This is the path of waypoints that the drone followed.
+    # So we check if we have a 'path' in our cameras file.
+    # (dtype=np.int32 is used to force numbers to be an int and it is memory efficient.)
     if 'waypoint_order' in data:
         result['waypoint_order'] = np.array(data['waypoint_order'], dtype=np.int32)
         result['has_route'] = True
@@ -598,9 +653,39 @@ def load_camera_parameters(json_path):
         result['waypoint_order'] = None
         result['has_route'] = False
     
+    # Our result ends up looking like this :)
+    # result = {
+    #     'metadata': data['metadata'],
+    #     'positions': positions,
+    #     'rotations': rotations,
+    #     'num_cameras': len(cameras)
+    #     'waypoint_order': _,
+    #     'has_route': _
+    # }
+
     return result
 
 def create_route_trace(params):
+    '''
+    Takes the output from load_camera_parameters() and creates a route 
+    from the waypoints. The (params) parameter here is the result dict
+    that was returned from load_camera_parameters().
+
+    Parameters
+    ----------
+    params : output of load_camera_parameters()
+    
+    Returns
+    ----------
+    plotly.graph_objects.Scatter3d()
+    '''
+
+    # .get tries to get the key 'has_route' from params.
+    # If 'has_route' could NOT be found, then return the default we 
+    # provide which is False.
+    #
+    # Could have just checked if has_route is False since
+    # has_route is must be in params?
     if not params.get('has_route', False):
         print("No route information found in params")
         return None
@@ -610,12 +695,18 @@ def create_route_trace(params):
         print("Waypoint order not found")
         return None
     
+    # We already get waypoint_order as a np.array?
+    # In load_camera_parameters we had 
+    # result['waypoint_order'] = np.array(data['waypoint_order'], dtype=np.int32).
     waypoint_order = np.array(waypoint_order)
     
     positions = params['positions']
     
+    # Numpy has this cool thing where you can index an array with a list or another numpy array.
+    # So here we 'extract' the position data for our specific waypoints that make up our path.
     route_points = positions[waypoint_order]
     
+    # Create the route trace.
     n = len(route_points)
     color_idx = np.linspace(0, 1, n)
     
@@ -885,8 +976,7 @@ def show3d_plotly(objects, ret=False):
             aspectmode='manual',
             aspectratio=aspectratio
         ),
-        width=800,
-        height=600,
+        autosize=True,
         margin=dict(l=0, r=0, b=0, t=0),
         showlegend=False,
         template='plotly_white'
