@@ -64,6 +64,7 @@ Upon launching, the UAVpath Simulator window will appear. From there, you can lo
 
 ## Team Members
 This project was successfully developed and delivered by:
+
 Aneesah Barnes - [Linkin] - <https://www.linkedin.com/in/aneesah-barnes-724143237/> 
 Marcus Buxmann - NA
 Rashaad Samsodien - [Linkin] - <https://www.linkedin.com/in/moegamatsamsodien/>
