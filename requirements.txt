@@ -1,0 +1,15 @@
+    PyOpenGL
+    numpy
+    open3d
+    trimesh
+    matplotlib
+    opencv-python
+    plotly
+    beautifulsoup4
+    cmasher
+    PyYAML
+    ipython
+    pyrender
+    ipywidgets
+    GPUtil
+    PyQt6
