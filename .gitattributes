@@ -1,0 +1,4 @@
+*.pkl filter=lfs diff=lfs merge=lfs -text
+*.ply filter=lfs diff=lfs merge=lfs -text
+*.obj filter=lfs diff=lfs merge=lfs -text
+models/Kiri_Vehera_SriLanka/Mesh/cached_scene.zip filter=lfs diff=lfs merge=lfs -text
